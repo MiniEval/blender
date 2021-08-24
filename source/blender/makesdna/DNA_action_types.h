@@ -607,6 +607,9 @@ typedef struct bActionGroup {
    */
   ListBase channels;
 
+  /** Parent group for nested action group organisation. */
+  struct bActionGroup *parent;
+
   /** Settings for this action-group. */
   int flag;
   /**

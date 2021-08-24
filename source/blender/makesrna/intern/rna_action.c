@@ -69,6 +69,38 @@ static void rna_ActionGroup_channels_next(CollectionPropertyIterator *iter)
   iter->valid = (internal->link != NULL);
 }
 
+static PointerRNA rna_ActionGroup_parent_get(PointerRNA *ptr)
+{
+  bActionGroup *data = (bActionGroup *)(ptr->data);
+  return rna_pointer_inherit_refine(ptr, &RNA_ActionGroup, data->parent);
+}
+
+static void rna_ActionGroup_parent_set(PointerRNA *ptr,
+                                       PointerRNA value,
+                                       struct ReportList *UNUSED(reports))
+{
+  bActionGroup *grp = (bActionGroup *)(ptr->data);
+  bActionGroup *pgrp, *pargrp = (bActionGroup *)(value.data);
+
+  /* within same action */
+  if (value.owner_id != ptr->owner_id) {
+    return;
+  }
+
+  /* make sure this is a valid child */
+  if (pargrp == grp) {
+    return;
+  }
+  
+  for (pgrp = pargrp->parent; pgrp; pgrp = pgrp->parent) {
+    if (pgrp == grp) {
+      return;
+    }
+  }
+
+  grp->parent = pargrp;
+}
+
 static bActionGroup *rna_Action_groups_new(bAction *act, const char name[])
 {
   return action_groups_add_new(act, name);
@@ -645,6 +677,13 @@ static void rna_def_action_group(BlenderRNA *brna)
   RNA_def_property_collection_funcs(
       prop, NULL, "rna_ActionGroup_channels_next", NULL, NULL, NULL, NULL, NULL, NULL);
   RNA_def_property_ui_text(prop, "Channels", "F-Curves in this group");
+
+  prop = RNA_def_property(srna, "parent", PROP_POINTER, PROP_NONE);
+  RNA_def_property_struct_type(prop, "ActionGroup");
+  RNA_def_property_pointer_funcs(
+      prop, "rna_ActionGroup_parent_get", "rna_ActionGroup_parent_set", NULL, NULL);
+  RNA_def_property_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop, "Parent", "Parent action group");
 
   prop = RNA_def_property(srna, "select", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "flag", AGRP_SELECTED);

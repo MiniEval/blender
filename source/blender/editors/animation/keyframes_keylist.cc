@@ -819,6 +819,19 @@ void agroup_to_keylist(AnimData *adt,
                        const int saction_flag)
 {
   if (agrp) {
+    /* loop through subgroups */
+    bActionGroup *subgrp;
+    for (subgrp = agrp->prev; subgrp; subgrp = subgrp->prev) {
+      if (subgrp->parent == agrp) {
+        agroup_to_keylist(adt, subgrp, keylist, saction_flag);
+      }
+    }
+    for (subgrp = agrp->next; subgrp; subgrp = subgrp->next) {
+      if (subgrp->parent == agrp) {
+        agroup_to_keylist(adt, subgrp, keylist, saction_flag);
+      }
+    }
+
     /* loop through F-Curves */
     LISTBASE_FOREACH (FCurve *, fcu, &agrp->channels) {
       if (fcu->grp != agrp) {

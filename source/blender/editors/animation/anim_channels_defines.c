@@ -362,6 +362,24 @@ static short acf_generic_group_offset(bAnimContext *ac, bAnimListElem *ale)
       offset += (short)(0.7f * U.widget_unit);
     }
 
+    /* nested action groups */
+    if (ale->type == ANIMTYPE_GROUP) {
+      bActionGroup *grp = (bActionGroup *)(ale->data);
+      while (grp->parent != NULL) {
+        offset += (short)(0.7f * U.widget_unit);
+        grp = grp->parent;
+      }
+    }
+    /* fcurves with nested action groups */
+    else if (ale->type == ANIMTYPE_FCURVE) {
+      FCurve *fcu = (FCurve *)(ale->data);
+      bActionGroup *grp = fcu->grp;
+      while (grp != NULL) {
+        offset += (short)(0.7f * U.widget_unit);
+        grp = grp->parent;
+      }
+    }
+    
     /* nodetree animdata */
     if (GS(ale->id->name) == ID_NT) {
       offset += acf_nodetree_rootType_offset((bNodeTree *)ale->id);

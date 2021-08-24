@@ -1377,8 +1377,12 @@ static size_t animfilter_act_group(bAnimContext *ac,
                                    bAction *act,
                                    bActionGroup *agrp,
                                    int filter_mode,
-                                   ID *owner_id)
+                                   ID *owner_id,
+                                   bActionGroup *rootgrp)
 {
+  if (agrp->parent != rootgrp) {
+    return 0;
+  }
   ListBase tmp_data = {NULL, NULL};
   size_t tmp_items = 0;
   size_t items = 0;
@@ -1424,6 +1428,14 @@ static size_t animfilter_act_group(bAnimContext *ac,
       if (!(filter_mode & ANIMFILTER_CURVE_VISIBLE) || !(agrp->flag & AGRP_NOTVISIBLE)) {
         /* group must be editable for its children to be editable (if we care about this) */
         if (!(filter_mode & ANIMFILTER_FOREDIT) || EDITABLE_AGRP(agrp)) {
+          /* handle nested groups recursively */
+          bActionGroup *subgrp;
+          for (subgrp = act->groups.first; subgrp; subgrp = subgrp->next) {
+            if (subgrp->parent == agrp) {
+              tmp_items += animfilter_act_group(ac, &tmp_data, ads, act, subgrp, filter_mode, owner_id, agrp);
+            }
+          }
+          
           /* get first F-Curve which can be used here */
           FCurve *first_fcu = animfilter_fcurve_next(
               ads, agrp->channels.first, ANIMTYPE_FCURVE, filter_mode, agrp, owner_id);
@@ -1488,7 +1500,7 @@ static size_t animfilter_action(bAnimContext *ac,
     }
 
     /* action group's channels */
-    items += animfilter_act_group(ac, anim_data, ads, act, agrp, filter_mode, owner_id);
+    items += animfilter_act_group(ac, anim_data, ads, act, agrp, filter_mode, owner_id, NULL);
   }
 
   /* un-grouped F-Curves (only if we're not only considering those channels in the active group) */

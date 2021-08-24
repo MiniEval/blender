@@ -163,10 +163,27 @@ static short agrp_keyframes_loop(KeyframeEditData *ked,
                                  FcuEditFunc fcu_cb)
 {
   FCurve *fcu;
+  bActionGroup *subgrp;
 
   /* sanity check */
   if (agrp == NULL) {
     return 0;
+  }
+
+  /* iterate over subgroups */
+  for (subgrp = agrp->prev; subgrp; subgrp = subgrp->prev) {
+    if (subgrp->parent == agrp) {
+      if (agrp_keyframes_loop(ked, subgrp, key_ok, key_cb, fcu_cb)) {
+        return 1;
+      }
+    }
+  }
+  for (subgrp = agrp->next; subgrp; subgrp = subgrp->next) {
+    if (subgrp->parent == agrp) {
+      if (agrp_keyframes_loop(ked, subgrp, key_ok, key_cb, fcu_cb)) {
+        return 1;
+      }
+    }
   }
 
   /* only iterate over the F-Curves that are in this group */
