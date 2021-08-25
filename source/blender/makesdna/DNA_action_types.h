@@ -607,7 +607,10 @@ typedef struct bActionGroup {
    */
   ListBase channels;
 
-  /** Parent group for nested action group organisation. */
+  /** Parent group for nested action group organisation.
+   * NOTE: Group hierarchy must be acyclic. This is enforced in the
+   * parent setter operator.
+   */
   struct bActionGroup *parent;
 
   /** Settings for this action-group. */

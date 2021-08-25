@@ -1999,6 +1999,218 @@ static void ANIM_OT_channels_delete(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
+/* ******************** Overgroup Operator ************************ */
+
+static bool animchannels_overgroup_poll(bContext *C)
+{
+  ScrArea *area = CTX_wm_area(C);
+  SpaceLink *sl;
+
+  /* channels region test */
+  /* TODO: could enhance with actually testing if channels region? */
+  if (ELEM(NULL, area, CTX_wm_region(C))) {
+    return 0;
+  }
+
+  /* animation editor test - must be suitable modes only */
+  sl = CTX_wm_space_data(C);
+
+  if(area->spacetype == SPACE_ACTION) {
+    SpaceAction *saction = (SpaceAction *)sl;
+
+    /* dopesheet and action only - all others are for other datatypes or have no groups */
+    if (ELEM(saction->mode, SACTCONT_ACTION, SACTCONT_DOPESHEET) == 0) {
+      return 0;
+    }
+  }
+
+  return 1;
+}
+
+/* ----------------------------------------------------------- */
+
+static void animchannels_create_overgroup(bAnimContext *ac,
+                                          bAnimListElem *adt_ref,
+                                          const char name[])
+{
+  AnimData *adt = adt_ref->adt;
+  bAction *act = adt->action;
+
+  if (act) {
+    int filter = AGRP_SELECTED;
+
+    bActionGroup *grp;
+    bActionGroup *agrp = action_groups_add_new(act, name);
+    agrp->flag = (AGRP_EXPANDED | AGRP_EXPANDED_G);
+    BLI_assert(agrp != NULL);
+
+    bool has_children = false;
+
+    /* create new overgroup and set parent of selected groups to overgroup */
+    for (grp = act->groups.first; grp; grp = grp->next) {
+      if (filter & grp->flag) {
+        grp->parent = agrp;
+        has_children = true;
+      }
+    }
+
+    /* remove newly created overgroup if empty */
+    if (!has_children) {
+      BLI_freelinkN(&adt->action->groups, agrp);
+    }
+  }
+}
+
+static int animchannels_create_overgroup_exec(bContext *C, wmOperator *op)
+{
+  bAnimContext ac;
+  char name[MAX_NAME];
+
+  /* get editor data */
+  if (ANIM_animdata_get_context(C, &ac) == 0) {
+    return OPERATOR_CANCELLED;
+  }
+
+  /* get name for new overgroup */
+  RNA_string_get(op->ptr, "name", name);
+
+  if (name[0]) {
+    ListBase anim_data = {NULL, NULL};
+    bAnimListElem *ale;
+    int filter;
+
+    /* Handle each animdata block separately, so that the regrouping doesn't flow into blocks. */
+    filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_LIST_VISIBLE | ANIMFILTER_ANIMDATA |
+              ANIMFILTER_NODUPLIS);
+    ANIM_animdata_filter(&ac, &anim_data, filter, ac.data, ac.datatype);
+
+    for (ale = anim_data.first; ale; ale = ale->next) {
+      animchannels_create_overgroup(&ac, ale, name);
+    }
+
+    /* free temp data */
+    ANIM_animdata_freelist(&anim_data);
+
+    /* Updates. */
+    WM_event_add_notifier(C, NC_ANIMATION | ND_ANIMCHAN | NA_EDITED, NULL);
+  }
+
+  return OPERATOR_FINISHED;
+}
+
+static void ANIM_OT_actiongroup_nest(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Nest Groups";
+  ot->idname = "ANIM_OT_actiongroup_nest";
+  ot->description = "Nest selected groups into a new overgroup";
+
+  /* callbacks */
+  ot->invoke = WM_operator_props_popup;
+  ot->exec = animchannels_create_overgroup_exec;
+  ot->poll = animchannels_overgroup_poll;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  /* props */
+  ot->prop = RNA_def_string(ot->srna,
+                            "name",
+                            "New Group",
+                            sizeof(((bActionGroup *)NULL)->name),
+                            "Name",
+                            "Name of newly created overgroup");
+}
+
+/* ----------------------------------------------------------- */
+
+static void animchannels_remove_overgroup(bAnimContext *ac,
+                                          bAnimListElem *adt_ref)
+{
+  AnimData *adt = adt_ref->adt;
+  bAction *act = adt->action;
+
+  if (act) {
+    bActionGroup* grp;
+
+    int filter = AGRP_SELECTED;
+
+    /* unnest selected groups by one layer */
+    for (grp = act->groups.first; grp; grp = grp->next) {
+      if (filter & grp->flag) {
+        bActionGroup *pargrp = grp->parent;
+
+        if (pargrp != NULL) {
+          grp->parent = pargrp->parent;
+
+          /* free overgroup if no remaining children */
+          bool has_children = false;
+          bActionGroup *subgrp;
+          for (subgrp = pargrp->prev; !(subgrp == NULL || has_children); subgrp = subgrp->prev) {
+            if (subgrp->parent == pargrp) {
+              has_children = true;
+            }
+          }
+          for (subgrp = pargrp->next; !(subgrp == NULL || has_children); subgrp = subgrp->next) {
+            if (subgrp->parent == pargrp) {
+              has_children = true;
+            }
+          }
+          if (!has_children) {
+            BLI_freelinkN(&adt->action->groups, pargrp);
+          }
+        }
+      }
+    }
+  }
+}
+
+static int animchannels_remove_overgroup_exec(bContext *C, wmOperator *op)
+{
+  bAnimContext ac;
+
+  /* get editor data */
+  if (ANIM_animdata_get_context(C, &ac) == 0) {
+    return OPERATOR_CANCELLED;
+  }
+
+  ListBase anim_data = {NULL, NULL};
+  bAnimListElem *ale;
+  int filter;
+
+  /* Handle each animdata block separately, so that the regrouping doesn't flow into blocks. */
+  filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_LIST_VISIBLE | ANIMFILTER_ANIMDATA |
+            ANIMFILTER_NODUPLIS);
+  ANIM_animdata_filter(&ac, &anim_data, filter, ac.data, ac.datatype);
+
+  for (ale = anim_data.first; ale; ale = ale->next) {
+    animchannels_remove_overgroup(&ac, ale);
+  }
+
+  /* free temp data */
+  ANIM_animdata_freelist(&anim_data);
+
+  /* Updates. */
+  WM_event_add_notifier(C, NC_ANIMATION | ND_ANIMCHAN | NA_EDITED, NULL);
+
+  return OPERATOR_FINISHED;
+}
+
+static void ANIM_OT_actiongroup_unnest(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Unnest Groups";
+  ot->idname = "ANIM_OT_actiongroup_unnest";
+  ot->description = "Remove selected groups from overgroup";
+
+  /* callbacks */
+  ot->exec = animchannels_remove_overgroup_exec;
+  ot->poll = animchannels_overgroup_poll;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+
 /* ********************** Set Flags Operator *********************** */
 
 /* defines for setting animation-channel flags */
@@ -3585,6 +3797,9 @@ void ED_operatortypes_animchannels(void)
 
   WM_operatortype_append(ANIM_OT_channels_group);
   WM_operatortype_append(ANIM_OT_channels_ungroup);
+
+  WM_operatortype_append(ANIM_OT_actiongroup_nest);
+  WM_operatortype_append(ANIM_OT_actiongroup_unnest);
 }
 
 /* TODO: check on a poll callback for this, to get hotkeys into menus */

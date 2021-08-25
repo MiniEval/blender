@@ -453,6 +453,10 @@ class DOPESHEET_MT_channel(Menu):
         layout.operator_context = 'INVOKE_REGION_CHANNELS'
 
         layout.operator("anim.channels_delete")
+        
+        layout.separator()
+        layout.operator("anim.actiongroup_nest")
+        layout.operator("anim.actiongroup_unnest")
 
         layout.separator()
         layout.operator("anim.channels_group")
