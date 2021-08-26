@@ -2019,12 +2019,12 @@ static bool animchannels_overgroup_poll(bContext *C)
     SpaceAction *saction = (SpaceAction *)sl;
 
     /* dopesheet and action only - all others are for other datatypes or have no groups */
-    if (ELEM(saction->mode, SACTCONT_ACTION, SACTCONT_DOPESHEET) == 0) {
-      return 0;
+    if (ELEM(saction->mode, SACTCONT_ACTION, SACTCONT_DOPESHEET)) {
+      return 1;
     }
   }
 
-  return 1;
+  return 0;
 }
 
 /* ----------------------------------------------------------- */
@@ -2038,25 +2038,22 @@ static void animchannels_create_overgroup(bAnimContext *ac,
 
   if (act) {
     int filter = AGRP_SELECTED;
-
-    bActionGroup *grp;
     bActionGroup *agrp = action_groups_add_new(act, name);
-    agrp->flag = (AGRP_EXPANDED | AGRP_EXPANDED_G);
+    // agrp->flag = (AGRP_EXPANDED | AGRP_EXPANDED_G);
     BLI_assert(agrp != NULL);
 
-    bool has_children = false;
-
+    bool used = false;
+    bActionGroup *grp;
     /* create new overgroup and set parent of selected groups to overgroup */
     for (grp = act->groups.first; grp; grp = grp->next) {
-      if (filter & grp->flag) {
+      if (grp != agrp && filter & grp->flag) {
         grp->parent = agrp;
-        has_children = true;
+        used = true;
       }
     }
 
-    /* remove newly created overgroup if empty */
-    if (!has_children) {
-      BLI_freelinkN(&adt->action->groups, agrp);
+    if (!used) {
+      BLI_freelinkN(&act->groups, agrp);
     }
   }
 }
@@ -2106,7 +2103,7 @@ static void ANIM_OT_actiongroup_nest(wmOperatorType *ot)
   ot->description = "Nest selected groups into a new overgroup";
 
   /* callbacks */
-  ot->invoke = WM_operator_props_popup;
+  ot->invoke = WM_operator_props_popup_confirm;
   ot->exec = animchannels_create_overgroup_exec;
   ot->poll = animchannels_overgroup_poll;
 

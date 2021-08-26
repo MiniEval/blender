@@ -1377,12 +1377,8 @@ static size_t animfilter_act_group(bAnimContext *ac,
                                    bAction *act,
                                    bActionGroup *agrp,
                                    int filter_mode,
-                                   ID *owner_id,
-                                   bActionGroup *rootgrp)
+                                   ID *owner_id)
 {
-  if (agrp->parent != rootgrp) {
-    return 0;
-  }
   ListBase tmp_data = {NULL, NULL};
   size_t tmp_items = 0;
   size_t items = 0;
@@ -1432,7 +1428,7 @@ static size_t animfilter_act_group(bAnimContext *ac,
           bActionGroup *subgrp;
           for (subgrp = act->groups.first; subgrp; subgrp = subgrp->next) {
             if (subgrp->parent == agrp) {
-              tmp_items += animfilter_act_group(ac, &tmp_data, ads, act, subgrp, filter_mode, owner_id, agrp);
+              tmp_items += animfilter_act_group(ac, &tmp_data, ads, act, subgrp, filter_mode, owner_id);
             }
           }
           
@@ -1500,7 +1496,9 @@ static size_t animfilter_action(bAnimContext *ac,
     }
 
     /* action group's channels */
-    items += animfilter_act_group(ac, anim_data, ads, act, agrp, filter_mode, owner_id, NULL);
+    if (agrp->parent == NULL) {
+      items += animfilter_act_group(ac, anim_data, ads, act, agrp, filter_mode, owner_id);
+    }
   }
 
   /* un-grouped F-Curves (only if we're not only considering those channels in the active group) */

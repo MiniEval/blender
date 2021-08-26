@@ -114,6 +114,18 @@ static void action_copy_data(Main *UNUSED(bmain), ID *id_dst, const ID *id_src, 
   BLI_duplicatelist(&action_dst->groups, &action_src->groups);
   BLI_duplicatelist(&action_dst->markers, &action_src->markers);
 
+  /* Relink action group parents */
+  bActionGroup *subgrp;
+  for (group_dst = action_dst->groups.first, group_src = action_src->groups.first;
+       group_dst && group_src;
+       group_dst = group_dst->next, group_src = group_src->next) {
+    for (subgrp = action_dst->groups.first; subgrp; subgrp = subgrp->next) {
+      if (subgrp->parent == group_src) {
+        subgrp->parent = group_dst;
+      }
+    }
+  }
+
   /* Copy F-Curves, fixing up the links as we go. */
   BLI_listbase_clear(&action_dst->curves);
 
@@ -225,6 +237,7 @@ static void action_blend_read_data(BlendDataReader *reader, ID *id)
   LISTBASE_FOREACH (bActionGroup *, agrp, &act->groups) {
     BLO_read_data_address(reader, &agrp->channels.first);
     BLO_read_data_address(reader, &agrp->channels.last);
+    BLO_read_data_address(reader, &agrp->parent);
   }
 
   BLO_read_data_address(reader, &act->preview);
